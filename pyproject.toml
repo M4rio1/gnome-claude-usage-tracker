@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
-    {name = "M4rio1", email = ""}
+    {name = "M4rio1"}
 ]
 keywords = ["gnome", "claude", "ai", "usage", "tracker"]
 classifiers = [
