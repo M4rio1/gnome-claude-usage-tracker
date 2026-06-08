@@ -5,10 +5,16 @@ import St from 'gi://St';
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
+import GObject from 'gi://GObject';
 
 const REFRESH_INTERVAL = 30000; // 30 seconds
 
-export class ClaudeIndicator extends PanelMenu.Button {
+// GJS does not support awaiting Gio's async DBusProxy.call directly; it must
+// be promisified to pair with its call_finish counterpart first.
+Gio._promisify(Gio.DBusProxy.prototype, 'call', 'call_finish');
+
+export const ClaudeIndicator = GObject.registerClass(
+class ClaudeIndicator extends PanelMenu.Button {
     constructor(extension) {
         super(0.0, 'Claude Usage Tracker');
 
@@ -19,16 +25,16 @@ export class ClaudeIndicator extends PanelMenu.Button {
         // Main container
         this._hbox = new St.BoxLayout({
             style_class: 'panel-status-menu-box',
+            style: 'spacing: 6px;',
             reactive: true,
-            track_hover: true,
-            spacing: 6
+            track_hover: true
         });
 
         this.add_child(this._hbox);
 
         // Claude icon
         this._icon = new St.Icon({
-            icon_name: 'text-editor-symbolic',
+            gicon: Gio.icon_new_for_string(`${extension.path}/icons/claude-symbolic.svg`),
             style_class: 'system-status-icon',
             icon_size: 16
         });
@@ -46,7 +52,7 @@ export class ClaudeIndicator extends PanelMenu.Button {
         this._buildMenu();
 
         // Settings changed
-        this._settings.connect('changed', () => this._onSettingsChanged());
+        this._settings.connect('changed', (settings, key) => this._onSettingsChanged(key));
 
         // Start refresh timer
         this._startRefreshTimer();
@@ -97,8 +103,9 @@ export class ClaudeIndicator extends PanelMenu.Button {
             return;
         }
 
-        const sessionPct = Math.round((usage.five_hour?.utilization ?? 0) * 100);
-        const weeklyPct = Math.round((usage.seven_day?.utilization ?? 0) * 100);
+        // The Claude API returns utilization already as a percentage (e.g. 35.0), not a fraction
+        const sessionPct = Math.round(usage.five_hour?.utilization ?? 0);
+        const weeklyPct = Math.round(usage.seven_day?.utilization ?? 0);
 
         this._label.set_text(`Session: ${sessionPct}% | Weekly: ${weeklyPct}%`);
         this._sessionItem.label.set_text(`Session: ${sessionPct}% | Weekly: ${weeklyPct}%`);
@@ -131,7 +138,9 @@ export class ClaudeIndicator extends PanelMenu.Button {
 
             // Call D-Bus service
             const usage = await this._callDaemon('GetUsageData');
-            if (usage) {
+            if (usage && usage.error) {
+                this._label.set_text(`Claude: ${usage.error}`);
+            } else if (usage) {
                 this._updateUI(usage);
             } else {
                 this._label.set_text('Claude: No data');
@@ -142,22 +151,43 @@ export class ClaudeIndicator extends PanelMenu.Button {
         }
     }
 
+    async _getDaemonProxy() {
+        if (this._proxy)
+            return this._proxy;
+
+        this._proxy = await new Promise((resolve, reject) => {
+            Gio.DBusProxy.new(
+                Gio.DBus.session,
+                Gio.DBusProxyFlags.NONE,
+                null,
+                'org.gnome.ClaudeUsage',
+                '/org/gnome/ClaudeUsage',
+                'org.gnome.ClaudeUsage',
+                null,
+                (proxy, res) => {
+                    try {
+                        resolve(Gio.DBusProxy.new_finish(res));
+                    } catch (e) {
+                        reject(e);
+                    }
+                }
+            );
+        });
+
+        return this._proxy;
+    }
+
     async _callDaemon(method) {
         try {
-            // This will be implemented to call the D-Bus daemon
-            // For now, return mock data
-            return {
-                five_hour: {
-                    utilization: 0.35,
-                    resets_at: new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString()
-                },
-                seven_day: {
-                    utilization: 0.62,
-                    resets_at: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
-                }
-            };
+            const proxy = await this._getDaemonProxy();
+            if (!proxy.g_name_owner)
+                throw new Error('daemon is not running');
+
+            const result = await proxy.call(method, null, Gio.DBusCallFlags.NONE, -1, null);
+            const [json] = result.deep_unpack();
+            return JSON.parse(json);
         } catch (e) {
-            console.error(`D-Bus call failed: ${e.message}`);
+            console.error(`D-Bus call to ${method} failed: ${e.message}`);
             return null;
         }
     }
@@ -166,13 +196,36 @@ export class ClaudeIndicator extends PanelMenu.Button {
         this._extension.openPreferences();
     }
 
-    _onSettingsChanged() {
-        // Settings changed, could trigger refresh
+    async _syncSessionKey() {
+        const key = this._settings.get_string('session-key');
+        if (!key)
+            return;
+
+        try {
+            const proxy = await this._getDaemonProxy();
+            if (!proxy.g_name_owner)
+                return;
+
+            await proxy.call(
+                'SetSessionKey',
+                new GLib.Variant('(s)', [key]),
+                Gio.DBusCallFlags.NONE, -1, null
+            );
+        } catch (e) {
+            console.error(`Failed to sync session key with daemon: ${e.message}`);
+        }
+    }
+
+    _onSettingsChanged(key) {
+        if (key === 'session-key')
+            this._syncSessionKey();
+
         this._refreshUsage();
     }
 
     _startRefreshTimer() {
-        // Initial refresh
+        // Push the configured session key to the daemon, then refresh
+        this._syncSessionKey();
         this._refreshUsage();
 
         // Set up timer
@@ -192,4 +245,4 @@ export class ClaudeIndicator extends PanelMenu.Button {
         }
         super.destroy();
     }
-}
+});
