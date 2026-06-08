@@ -95,9 +95,9 @@ source "$VENV_DIR/bin/activate"
 
 echo "  Installing packages..."
 if [ "$DEV_MODE" = "--dev" ]; then
-    pip install -e .
+    pip install -e ".[dev]"
 else
-    pip install -r requirements.txt
+    pip install -e .
 fi
 
 # Create wrapper script for daemon
