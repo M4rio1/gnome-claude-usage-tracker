@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="gnome-shell-extensions-claude-usage">
+  <schema id="org.gnome.shell.extensions.claude-usage" path="/org/gnome/shell/extensions/claude-usage/" allow-external-write="false">
+    <key type="s" name="session-key">
+      <default>""</default>
+      <summary>Claude.ai session key</summary>
+      <description>Your Claude.ai session key for API authentication (starts with sk-ant-sid01-)</description>
+    </key>
+
+    <key type="s" name="organization-id">
+      <default>""</default>
+      <summary>Organization ID</summary>
+      <description>Your Claude organization ID</description>
+    </key>
+
+    <key type="i" name="refresh-interval">
+      <default>30</default>
+      <range min="5" max="300"/>
+      <summary>Refresh interval</summary>
+      <description>How often to refresh usage data in seconds</description>
+    </key>
+
+    <key type="b" name="show-session">
+      <default>true</default>
+      <summary>Show session usage</summary>
+      <description>Display 5-hour session usage in top bar</description>
+    </key>
+
+    <key type="b" name="show-weekly">
+      <default>true</default>
+      <summary>Show weekly usage</summary>
+      <description>Display weekly usage in top bar</description>
+    </key>
+
+    <key type="b" name="show-percentage">
+      <default>true</default>
+      <summary>Show percentage symbol</summary>
+      <description>Display % symbol after usage values</description>
+    </key>
+  </schema>
+</schemalist>

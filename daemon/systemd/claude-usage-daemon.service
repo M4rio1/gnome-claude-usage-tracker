@@ -1,0 +1,15 @@
+[Unit]
+Description=Claude Usage Tracker Daemon
+Documentation=https://github.com/M4rio1/gnome-claude-usage-tracker
+After=dbus.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/claude-usage-daemon
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
