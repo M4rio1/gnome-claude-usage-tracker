@@ -40,13 +40,24 @@ class ClaudeIndicator extends PanelMenu.Button {
         });
         this._hbox.add_child(this._icon);
 
-        // Status label
-        this._label = new St.Label({
-            text: 'Claude: --',
+        const makeStaticLabel = text => new St.Label({
+            text,
             y_align: Clutter.ActorAlign.CENTER,
             style_class: 'claude-label'
         });
-        this._hbox.add_child(this._label);
+        const makeValueLabel = () => new St.Label({
+            text: '--',
+            y_align: Clutter.ActorAlign.CENTER,
+            style_class: 'claude-label'
+        });
+
+        this._hbox.add_child(makeStaticLabel('Session:'));
+        this._sessionValueLabel = makeValueLabel();
+        this._hbox.add_child(this._sessionValueLabel);
+
+        this._hbox.add_child(makeStaticLabel('Weekly:'));
+        this._weeklyValueLabel = makeValueLabel();
+        this._hbox.add_child(this._weeklyValueLabel);
 
         // Build menu
         this._buildMenu();
@@ -61,7 +72,7 @@ class ClaudeIndicator extends PanelMenu.Button {
     _buildMenu() {
         // Usage info items
         this._sessionItem = new PopupMenu.PopupMenuItem(
-            'Session: -- | Weekly: --',
+            'Session: --   Weekly: --',
             {reactive: false}
         );
         this.menu.addMenuItem(this._sessionItem);
@@ -98,8 +109,10 @@ class ClaudeIndicator extends PanelMenu.Button {
 
     _updateUI(usage) {
         if (!usage) {
-            this._label.set_text('Claude: Error');
-            this._icon.set_style_class_name('system-status-icon error');
+            this._sessionValueLabel.set_text('err');
+            this._weeklyValueLabel.set_text('err');
+            this._sessionValueLabel.set_style_class_name('claude-label claude-critical');
+            this._weeklyValueLabel.set_style_class_name('claude-label claude-critical');
             return;
         }
 
@@ -107,11 +120,12 @@ class ClaudeIndicator extends PanelMenu.Button {
         const sessionPct = Math.round(usage.five_hour?.utilization ?? 0);
         const weeklyPct = Math.round(usage.seven_day?.utilization ?? 0);
 
-        this._label.set_text(`Session: ${sessionPct}% | Weekly: ${weeklyPct}%`);
-        this._sessionItem.label.set_text(`Session: ${sessionPct}% | Weekly: ${weeklyPct}%`);
+        this._sessionValueLabel.set_text(`${sessionPct}%`);
+        this._weeklyValueLabel.set_text(`${weeklyPct}%`);
+        this._sessionItem.label.set_text(`Session: ${sessionPct}%   Weekly: ${weeklyPct}%`);
 
-        // Update icon color based on usage
-        this._updateIconColor(sessionPct);
+        // Update label color based on usage
+        this._updateLabelColor(sessionPct);
 
         // Update reset times
         if (usage.five_hour?.resets_at) {
@@ -122,32 +136,37 @@ class ClaudeIndicator extends PanelMenu.Button {
         this._usageData = usage;
     }
 
-    _updateIconColor(sessionPct) {
+    _updateLabelColor(sessionPct) {
         let colorClass = 'claude-safe';
         if (sessionPct > 80) {
             colorClass = 'claude-critical';
         } else if (sessionPct > 50) {
             colorClass = 'claude-moderate';
         }
-        this._icon.set_style_class_name(`system-status-icon ${colorClass}`);
+        this._sessionValueLabel.set_style_class_name(`claude-label ${colorClass}`);
+        this._weeklyValueLabel.set_style_class_name(`claude-label ${colorClass}`);
     }
 
     async _refreshUsage() {
         try {
-            this._label.set_text('Claude: Loading...');
+            this._sessionValueLabel.set_text('--');
+            this._weeklyValueLabel.set_text('--');
 
             // Call D-Bus service
             const usage = await this._callDaemon('GetUsageData');
             if (usage && usage.error) {
-                this._label.set_text(`Claude: ${usage.error}`);
+                this._sessionValueLabel.set_text('err');
+                this._weeklyValueLabel.set_text('err');
             } else if (usage) {
                 this._updateUI(usage);
             } else {
-                this._label.set_text('Claude: No data');
+                this._sessionValueLabel.set_text('--');
+                this._weeklyValueLabel.set_text('--');
             }
         } catch (e) {
             console.error('Error fetching usage:', e.message);
-            this._label.set_text('Claude: Error');
+            this._sessionValueLabel.set_text('err');
+            this._weeklyValueLabel.set_text('err');
         }
     }
 

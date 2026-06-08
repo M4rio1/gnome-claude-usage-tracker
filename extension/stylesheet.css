@@ -1,0 +1,11 @@
+.claude-safe {
+    color: #57e389; /* green */
+}
+
+.claude-moderate {
+    color: #f8e45c; /* yellow */
+}
+
+.claude-critical {
+    color: #ff7800; /* orange-red */
+}
