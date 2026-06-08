@@ -47,37 +47,46 @@ class ClaudeUsageDaemon:
         self.running = True
 
     async def run(self):
-        """Start the daemon."""
-        try:
-            logger.info("Starting Claude Usage Tracker daemon...")
+        """Start the daemon, reconnecting to D-Bus if the connection drops.
 
-            # Connect to session bus
-            self.bus = await MessageBus(bus_type=BusType.SESSION).connect()
+        dbus_next's connection can die silently (e.g. EOFError in its
+        background message reader) without raising into this coroutine, so
+        we explicitly wait for disconnection and reconnect rather than just
+        looping on `self.running`.
+        """
+        logger.info("Starting Claude Usage Tracker daemon...")
 
-            # Create and export service interface
-            self.interface = ClaudeUsageInterface()
-            self.bus.export('/org/gnome/ClaudeUsage', self.interface)
+        while self.running:
+            try:
+                self.bus = await MessageBus(bus_type=BusType.SESSION).connect()
 
-            # Request service name
-            await self.bus.request_name('org.gnome.ClaudeUsage')
+                self.interface = ClaudeUsageInterface()
+                self.bus.export('/org/gnome/ClaudeUsage', self.interface)
 
-            logger.info("✓ Daemon started successfully")
-            logger.info("  D-Bus service: org.gnome.ClaudeUsage")
-            logger.info("  Object path: /org/gnome/ClaudeUsage")
-            logger.info("  Interface: org.gnome.ClaudeUsage")
+                await self.bus.request_name('org.gnome.ClaudeUsage')
 
-            # Run until interrupted
-            while self.running:
-                await asyncio.sleep(1)
+                logger.info("✓ Daemon connected to D-Bus")
+                logger.info("  D-Bus service: org.gnome.ClaudeUsage")
+                logger.info("  Object path: /org/gnome/ClaudeUsage")
+                logger.info("  Interface: org.gnome.ClaudeUsage")
 
-        except Exception as e:
-            logger.error(f"Daemon error: {e}")
-            raise
+                await self.bus.wait_for_disconnect()
+
+                if self.running:
+                    logger.warning("D-Bus connection lost, reconnecting in 5s...")
+                    await asyncio.sleep(5)
+            except Exception as e:
+                if not self.running:
+                    break
+                logger.error(f"D-Bus connection error: {e}, retrying in 5s...")
+                await asyncio.sleep(5)
 
     def stop(self):
         """Stop the daemon."""
         logger.info("Stopping daemon...")
         self.running = False
+        if self.bus is not None:
+            self.bus.disconnect()
 
 
 async def main():
