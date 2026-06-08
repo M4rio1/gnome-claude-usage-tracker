@@ -40,8 +40,8 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-where = ["daemon"]
-include = ["claude_usage*"]
+where = ["."]
+include = ["daemon*"]
 
 [tool.black]
 line-length = 100
