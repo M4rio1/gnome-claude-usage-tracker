@@ -1,4 +1,4 @@
-import Gio from 'gi://Gio';
+import Adw from 'gi://Adw';
 import Gtk from 'gi://Gtk';
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
@@ -6,89 +6,71 @@ export default class ClaudeUsagePreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
 
-        const vbox = new Gtk.Box({
-            orientation: Gtk.Orientation.VERTICAL,
-            spacing: 12,
-            margin_top: 12,
-            margin_bottom: 12,
-            margin_start: 12,
-            margin_end: 12
-        });
+        const page = new Adw.PreferencesPage();
+        window.add(page);
 
-        // Title
-        const title = new Gtk.Label({
-            label: '<b>Claude Usage Tracker Settings</b>',
-            use_markup: true,
-            xalign: 0
+        const group = new Adw.PreferencesGroup({
+            title: 'Claude Usage Tracker Settings'
         });
-        vbox.append(title);
+        page.add(group);
 
-        // Session Key Input
-        const sessionKeyLabel = new Gtk.Label({
-            label: 'Session Key:',
-            xalign: 0
+        // Session Key
+        const sessionKeyRow = new Adw.PasswordEntryRow({
+            title: 'Session Key',
         });
-        vbox.append(sessionKeyLabel);
-
-        const sessionKeyEntry = new Gtk.Entry({
-            visibility: false,
-            placeholder_text: 'sk-ant-sid01-...'
-        });
-        sessionKeyEntry.set_text(settings.get_string('session-key'));
-        sessionKeyEntry.connect('changed', (w) => {
+        sessionKeyRow.set_text(settings.get_string('session-key'));
+        sessionKeyRow.connect('changed', (w) => {
             settings.set_string('session-key', w.get_text());
         });
-        vbox.append(sessionKeyEntry);
+        group.add(sessionKeyRow);
 
         // Test Connection Button
         const testButton = new Gtk.Button({
-            label: 'Test Connection'
+            label: 'Test Connection',
+            valign: Gtk.Align.CENTER,
         });
         testButton.connect('clicked', () => {
             console.log('Test connection clicked');
         });
-        vbox.append(testButton);
+        const testRow = new Adw.ActionRow({
+            title: 'Connection',
+        });
+        testRow.add_suffix(testButton);
+        group.add(testRow);
 
         // Refresh Interval
-        const refreshLabel = new Gtk.Label({
-            label: 'Refresh Interval (seconds):',
-            xalign: 0
-        });
-        vbox.append(refreshLabel);
-
-        const refreshSpin = new Gtk.SpinButton({
+        const refreshRow = new Adw.SpinRow({
+            title: 'Refresh Interval (seconds)',
             adjustment: new Gtk.Adjustment({
                 lower: 5,
                 upper: 300,
                 step_increment: 5
             })
         });
-        refreshSpin.set_value(settings.get_int('refresh-interval'));
-        refreshSpin.connect('value-changed', (w) => {
+        refreshRow.set_value(settings.get_int('refresh-interval'));
+        refreshRow.connect('changed', (w) => {
             settings.set_int('refresh-interval', w.get_value());
         });
-        vbox.append(refreshSpin);
+        group.add(refreshRow);
 
-        // Show Session Checkbox
-        const showSessionCheck = new Gtk.CheckButton({
-            label: 'Show Session Usage in Top Bar'
+        // Show Session Switch
+        const showSessionRow = new Adw.SwitchRow({
+            title: 'Show Session Usage in Top Bar',
         });
-        showSessionCheck.set_active(settings.get_boolean('show-session'));
-        showSessionCheck.connect('toggled', (w) => {
+        showSessionRow.set_active(settings.get_boolean('show-session'));
+        showSessionRow.connect('notify::active', (w) => {
             settings.set_boolean('show-session', w.get_active());
         });
-        vbox.append(showSessionCheck);
+        group.add(showSessionRow);
 
-        // Show Weekly Checkbox
-        const showWeeklyCheck = new Gtk.CheckButton({
-            label: 'Show Weekly Usage in Top Bar'
+        // Show Weekly Switch
+        const showWeeklyRow = new Adw.SwitchRow({
+            title: 'Show Weekly Usage in Top Bar',
         });
-        showWeeklyCheck.set_active(settings.get_boolean('show-weekly'));
-        showWeeklyCheck.connect('toggled', (w) => {
+        showWeeklyRow.set_active(settings.get_boolean('show-weekly'));
+        showWeeklyRow.connect('notify::active', (w) => {
             settings.set_boolean('show-weekly', w.get_active());
         });
-        vbox.append(showWeeklyCheck);
-
-        window.add(vbox);
+        group.add(showWeeklyRow);
     }
 }
