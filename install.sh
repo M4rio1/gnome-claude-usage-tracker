@@ -50,7 +50,6 @@ echo "📁 Creating directories..."
 mkdir -p "$EXTENSION_DIR"
 mkdir -p "$SCHEMA_DIR"
 mkdir -p "$SYSTEMD_USER_DIR"
-mkdir -p "$VENV_DIR"
 mkdir -p "$BIN_DIR"
 echo -e "${GREEN}✓ Directories created${NC}"
 
@@ -74,15 +73,27 @@ echo -e "${GREEN}✓ Daemon service installed${NC}"
 # Install Python dependencies using venv
 echo "📚 Installing Python dependencies..."
 
-# Create virtual environment if it doesn't exist
-if [ ! -d "$VENV_DIR" ]; then
-    echo "  Creating virtual environment..."
-    python3 -m venv "$VENV_DIR"
+# Remove old venv if it exists
+if [ -d "$VENV_DIR" ]; then
+    echo "  Removing old virtual environment..."
+    rm -rf "$VENV_DIR"
+fi
+
+# Create virtual environment
+echo "  Creating virtual environment..."
+python3 -m venv "$VENV_DIR"
+
+# Check if venv was created successfully
+if [ ! -f "$VENV_DIR/bin/activate" ]; then
+    echo -e "${RED}✗ Failed to create virtual environment${NC}"
+    echo "  Try installing python3-venv: sudo apt install python3-venv"
+    exit 1
 fi
 
 # Activate venv and install dependencies
 source "$VENV_DIR/bin/activate"
 
+echo "  Installing packages..."
 if [ "$DEV_MODE" = "--dev" ]; then
     pip install -e .
 else
@@ -90,6 +101,7 @@ else
 fi
 
 # Create wrapper script for daemon
+echo "  Creating daemon wrapper script..."
 cat > "$BIN_DIR/claude-usage-daemon" << 'WRAPPER_EOF'
 #!/bin/bash
 VENV_DIR="$HOME/.local/lib/claude-usage-venv"
@@ -99,6 +111,7 @@ WRAPPER_EOF
 
 chmod +x "$BIN_DIR/claude-usage-daemon"
 
+# Deactivate venv
 deactivate
 
 echo -e "${GREEN}✓ Python dependencies installed${NC}"
