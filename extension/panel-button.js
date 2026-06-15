@@ -1,4 +1,3 @@
-import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import St from 'gi://St';
@@ -6,8 +5,6 @@ import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import GObject from 'gi://GObject';
-
-const REFRESH_INTERVAL = 30000; // 30 seconds
 
 // GJS does not support awaiting Gio's async DBusProxy.call directly; it must
 // be promisified to pair with its call_finish counterpart first.
@@ -19,63 +16,61 @@ class ClaudeIndicator extends PanelMenu.Button {
         super(0.0, 'Claude Usage Tracker');
 
         this._extension = extension;
-        this._usageData = null;
-        this._settings = extension.getSettings('org.gnome.shell.extensions.claude-usage');
+        this._settings = extension.getSettings();
 
-        // Main container
         this._hbox = new St.BoxLayout({
             style_class: 'panel-status-menu-box',
             style: 'spacing: 6px;',
             reactive: true,
-            track_hover: true
+            track_hover: true,
         });
-
         this.add_child(this._hbox);
 
-        // Claude icon
         this._icon = new St.Icon({
             gicon: Gio.icon_new_for_string(`${extension.path}/icons/claude-symbolic.svg`),
             style_class: 'system-status-icon',
-            icon_size: 16
+            icon_size: 16,
         });
         this._hbox.add_child(this._icon);
 
         const makeStaticLabel = text => new St.Label({
             text,
             y_align: Clutter.ActorAlign.CENTER,
-            style_class: 'claude-label'
+            style_class: 'claude-label',
         });
         const makeValueLabel = () => new St.Label({
             text: '--',
             y_align: Clutter.ActorAlign.CENTER,
-            style_class: 'claude-label'
+            style_class: 'claude-label',
         });
 
-        this._hbox.add_child(makeStaticLabel('Session:'));
+        this._sessionTitleLabel = makeStaticLabel('Session:');
         this._sessionValueLabel = makeValueLabel();
-        this._hbox.add_child(this._sessionValueLabel);
-
-        this._hbox.add_child(makeStaticLabel('Weekly:'));
+        this._weeklyTitleLabel = makeStaticLabel('Weekly:');
         this._weeklyValueLabel = makeValueLabel();
+
+        this._hbox.add_child(this._sessionTitleLabel);
+        this._hbox.add_child(this._sessionValueLabel);
+        this._hbox.add_child(this._weeklyTitleLabel);
         this._hbox.add_child(this._weeklyValueLabel);
 
-        // Build menu
         this._buildMenu();
+        this._updateVisibility();
 
-        // Settings changed
-        this._settings.connect('changed', (settings, key) => this._onSettingsChanged(key));
+        this._settingsChangedId = this._settings.connect(
+            'changed', (settings, key) => this._onSettingsChanged(key));
 
-        // Start refresh timer
+        this._syncSessionKey();
+        this._refreshUsage();
         this._startRefreshTimer();
     }
 
     _buildMenu() {
-        // Usage info items
-        this._sessionItem = new PopupMenu.PopupMenuItem(
+        this._usageItem = new PopupMenu.PopupMenuItem(
             'Session: --   Weekly: --',
             {reactive: false}
         );
-        this.menu.addMenuItem(this._sessionItem);
+        this.menu.addMenuItem(this._usageItem);
 
         this._resetTimeItem = new PopupMenu.PopupMenuItem(
             'Next reset: --',
@@ -83,90 +78,76 @@ class ClaudeIndicator extends PanelMenu.Button {
         );
         this.menu.addMenuItem(this._resetTimeItem);
 
-        // Separator
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-        // Settings button
-        let settingsItem = new PopupMenu.PopupImageMenuItem(
+        const settingsItem = new PopupMenu.PopupImageMenuItem(
             'Preferences',
             'preferences-system-symbolic'
         );
-        settingsItem.connect('activate', () => {
-            this._openPreferences();
-        });
+        settingsItem.connect('activate', () => this._extension.openPreferences());
         this.menu.addMenuItem(settingsItem);
 
-        // Refresh button
-        let refreshItem = new PopupMenu.PopupImageMenuItem(
+        const refreshItem = new PopupMenu.PopupImageMenuItem(
             'Refresh',
             'view-refresh-symbolic'
         );
-        refreshItem.connect('activate', () => {
-            this._refreshUsage();
-        });
+        refreshItem.connect('activate', () => this._refreshUsage());
         this.menu.addMenuItem(refreshItem);
     }
 
-    _updateUI(usage) {
-        if (!usage) {
-            this._sessionValueLabel.set_text('err');
-            this._weeklyValueLabel.set_text('err');
-            this._sessionValueLabel.set_style_class_name('claude-label claude-critical');
-            this._weeklyValueLabel.set_style_class_name('claude-label claude-critical');
-            return;
-        }
+    _updateVisibility() {
+        const showSession = this._settings.get_boolean('show-session');
+        const showWeekly = this._settings.get_boolean('show-weekly');
 
+        this._sessionTitleLabel.visible = showSession;
+        this._sessionValueLabel.visible = showSession;
+        this._weeklyTitleLabel.visible = showWeekly;
+        this._weeklyValueLabel.visible = showWeekly;
+    }
+
+    _updateUI(usage) {
         // The Claude API returns utilization already as a percentage (e.g. 35.0), not a fraction
         const sessionPct = Math.round(usage.five_hour?.utilization ?? 0);
         const weeklyPct = Math.round(usage.seven_day?.utilization ?? 0);
 
         this._sessionValueLabel.set_text(`${sessionPct}%`);
         this._weeklyValueLabel.set_text(`${weeklyPct}%`);
-        this._sessionItem.label.set_text(`Session: ${sessionPct}%   Weekly: ${weeklyPct}%`);
+        this._usageItem.label.set_text(`Session: ${sessionPct}%   Weekly: ${weeklyPct}%`);
 
-        // Update label color based on usage
-        this._updateLabelColor(sessionPct);
+        this._sessionValueLabel.set_style_class_name(`claude-label ${this._colorClassFor(sessionPct)}`);
+        this._weeklyValueLabel.set_style_class_name(`claude-label ${this._colorClassFor(weeklyPct)}`);
 
-        // Update reset times
         if (usage.five_hour?.resets_at) {
             const resetTime = new Date(usage.five_hour.resets_at);
             this._resetTimeItem.label.set_text(`Session resets: ${resetTime.toLocaleTimeString()}`);
         }
-
-        this._usageData = usage;
     }
 
-    _updateLabelColor(sessionPct) {
-        let colorClass = 'claude-safe';
-        if (sessionPct > 80) {
-            colorClass = 'claude-critical';
-        } else if (sessionPct > 50) {
-            colorClass = 'claude-moderate';
-        }
-        this._sessionValueLabel.set_style_class_name(`claude-label ${colorClass}`);
-        this._weeklyValueLabel.set_style_class_name(`claude-label ${colorClass}`);
+    _colorClassFor(pct) {
+        if (pct > 80)
+            return 'claude-critical';
+        if (pct > 50)
+            return 'claude-moderate';
+        return 'claude-safe';
+    }
+
+    _showError() {
+        this._sessionValueLabel.set_text('err');
+        this._weeklyValueLabel.set_text('err');
+        this._sessionValueLabel.set_style_class_name('claude-label claude-critical');
+        this._weeklyValueLabel.set_style_class_name('claude-label claude-critical');
     }
 
     async _refreshUsage() {
         try {
-            this._sessionValueLabel.set_text('--');
-            this._weeklyValueLabel.set_text('--');
-
-            // Call D-Bus service
             const usage = await this._callDaemon('GetUsageData');
-            if (usage && usage.error) {
-                this._sessionValueLabel.set_text('err');
-                this._weeklyValueLabel.set_text('err');
-            } else if (usage) {
+            if (usage && !usage.error)
                 this._updateUI(usage);
-            } else {
-                this._sessionValueLabel.set_text('--');
-                this._weeklyValueLabel.set_text('--');
-            }
+            else
+                this._showError();
         } catch (e) {
-            console.error('Error fetching usage:', e.message);
-            this._sessionValueLabel.set_text('err');
-            this._weeklyValueLabel.set_text('err');
+            console.error(`Failed to refresh Claude usage: ${e.message}`);
+            this._showError();
         }
     }
 
@@ -211,10 +192,6 @@ class ClaudeIndicator extends PanelMenu.Button {
         }
     }
 
-    _openPreferences() {
-        this._extension.openPreferences();
-    }
-
     async _syncSessionKey() {
         const key = this._settings.get_string('session-key');
         if (!key)
@@ -236,21 +213,25 @@ class ClaudeIndicator extends PanelMenu.Button {
     }
 
     _onSettingsChanged(key) {
-        if (key === 'session-key')
-            this._syncSessionKey();
-
-        this._refreshUsage();
+        switch (key) {
+        case 'session-key':
+            this._syncSessionKey().then(() => this._refreshUsage());
+            break;
+        case 'refresh-interval':
+            this._stopRefreshTimer();
+            this._startRefreshTimer();
+            break;
+        case 'show-session':
+        case 'show-weekly':
+            this._updateVisibility();
+            break;
+        }
     }
 
     _startRefreshTimer() {
-        // Push the configured session key to the daemon, then refresh
-        this._syncSessionKey();
-        this._refreshUsage();
-
-        // Set up timer
-        this._refreshTimeout = GLib.timeout_add(
+        this._refreshTimeout = GLib.timeout_add_seconds(
             GLib.PRIORITY_DEFAULT,
-            REFRESH_INTERVAL,
+            this._settings.get_int('refresh-interval'),
             () => {
                 this._refreshUsage();
                 return GLib.SOURCE_CONTINUE;
@@ -258,10 +239,24 @@ class ClaudeIndicator extends PanelMenu.Button {
         );
     }
 
-    destroy() {
+    _stopRefreshTimer() {
         if (this._refreshTimeout) {
             GLib.source_remove(this._refreshTimeout);
+            this._refreshTimeout = null;
         }
+    }
+
+    destroy() {
+        this._stopRefreshTimer();
+
+        if (this._settingsChangedId) {
+            this._settings.disconnect(this._settingsChangedId);
+            this._settingsChangedId = null;
+        }
+
+        this._settings = null;
+        this._proxy = null;
+
         super.destroy();
     }
 });
