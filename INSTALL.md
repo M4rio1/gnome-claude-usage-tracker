@@ -48,7 +48,7 @@ The script will:
 
 ```bash
 mkdir -p ~/.local/share/glib-2.0/schemas/
-cp schemas/org.gnome.shell.extensions.claude-usage.gschema.xml \
+cp extension/schemas/org.gnome.shell.extensions.claude-usage.gschema.xml \
    ~/.local/share/glib-2.0/schemas/
 
 glib-compile-schemas ~/.local/share/glib-2.0/schemas/

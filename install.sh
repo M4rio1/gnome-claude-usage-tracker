@@ -55,7 +55,7 @@ echo -e "${GREEN}✓ Directories created${NC}"
 
 # Install GSettings schema
 echo "⚙️  Installing GSettings schema..."
-cp schemas/org.gnome.shell.extensions.claude-usage.gschema.xml "$SCHEMA_DIR/"
+cp extension/schemas/org.gnome.shell.extensions.claude-usage.gschema.xml "$SCHEMA_DIR/"
 glib-compile-schemas "$SCHEMA_DIR/"
 echo -e "${GREEN}✓ Schema installed and compiled${NC}"
 

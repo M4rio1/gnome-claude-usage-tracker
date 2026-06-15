@@ -7,12 +7,6 @@
       <description>Your Claude.ai session key for API authentication (starts with sk-ant-sid01-)</description>
     </key>
 
-    <key type="s" name="organization-id">
-      <default>""</default>
-      <summary>Organization ID</summary>
-      <description>Your Claude organization ID</description>
-    </key>
-
     <key type="i" name="refresh-interval">
       <default>30</default>
       <range min="5" max="300"/>
@@ -30,12 +24,6 @@
       <default>true</default>
       <summary>Show weekly usage</summary>
       <description>Display weekly usage in top bar</description>
-    </key>
-
-    <key type="b" name="show-percentage">
-      <default>true</default>
-      <summary>Show percentage symbol</summary>
-      <description>Display % symbol after usage values</description>
     </key>
   </schema>
 </schemalist>

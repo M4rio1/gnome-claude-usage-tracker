@@ -133,8 +133,12 @@ gnome-claude-usage-tracker/
 │   ├── metadata.json
 │   ├── extension.js
 │   ├── panel-button.js
-│   ├── popup-menu.js
-│   └── settings.js
+│   ├── prefs.js
+│   ├── stylesheet.css
+│   ├── icons/
+│   │   └── claude-symbolic.svg
+│   └── schemas/                  # GSettings configuration schema
+│       └── org.gnome.shell.extensions.claude-usage.gschema.xml
 ├── daemon/                       # Background Service (Python)
 │   ├── __init__.py
 │   ├── claude_usage_daemon.py
@@ -143,8 +147,6 @@ gnome-claude-usage-tracker/
 │   ├── dbus_service.py
 │   └── systemd/
 │       └── claude-usage-daemon.service
-├── schemas/                      # GSettings Configuration
-│   └── org.gnome.shell.extensions.claude-usage.gschema.xml
 ├── install.sh                    # Installation script
 ├── pyproject.toml               # Python package config
 ├── requirements.txt              # Python dependencies
