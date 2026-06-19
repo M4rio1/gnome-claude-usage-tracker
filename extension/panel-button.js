@@ -10,6 +10,57 @@ import GObject from 'gi://GObject';
 // be promisified to pair with its call_finish counterpart first.
 Gio._promisify(Gio.DBusProxy.prototype, 'call', 'call_finish');
 
+const ProgressTrackWidth = 220;
+
+const UsageMenuItem = GObject.registerClass(
+class UsageMenuItem extends PopupMenu.PopupBaseMenuItem {
+    _init(title) {
+        super._init({reactive: false, can_focus: false});
+
+        this.box = new St.BoxLayout({
+            vertical: true,
+            x_expand: true,
+            style_class: 'claude-usage-row',
+        });
+
+        const headerBox = new St.BoxLayout({style_class: 'claude-usage-row-header'});
+        this.titleLabel = new St.Label({
+            text: title,
+            x_expand: true,
+            style_class: 'claude-usage-title',
+        });
+        this.valueLabel = new St.Label({
+            text: '--',
+            style_class: 'claude-usage-value',
+        });
+        headerBox.add_child(this.titleLabel);
+        headerBox.add_child(this.valueLabel);
+        this.box.add_child(headerBox);
+
+        this._track = new St.Widget({
+            style_class: 'claude-progress-track',
+            style: `width: ${ProgressTrackWidth}px;`,
+        });
+        this._fill = new St.Widget({
+            style_class: 'claude-progress-fill',
+            style: 'width: 0px;',
+        });
+        this._track.add_child(this._fill);
+        this.box.add_child(this._track);
+
+        this.add_child(this.box);
+    }
+
+    setUsage(pct, colorClass) {
+        this.valueLabel.set_text(`${pct}%`);
+        this.valueLabel.set_style_class_name(`claude-usage-value ${colorClass}`);
+
+        const fillWidth = Math.round(Math.min(Math.max(pct, 0), 100) / 100 * ProgressTrackWidth);
+        this._fill.set_style(`width: ${fillWidth}px;`);
+        this._fill.set_style_class_name(`claude-progress-fill ${colorClass}-bg`);
+    }
+});
+
 export const ClaudeIndicator = GObject.registerClass(
 class ClaudeIndicator extends PanelMenu.Button {
     constructor(extension) {
@@ -66,14 +117,30 @@ class ClaudeIndicator extends PanelMenu.Button {
     }
 
     _buildMenu() {
-        this._usageItem = new PopupMenu.PopupMenuItem(
-            'Session: --   Weekly: --',
-            {reactive: false}
-        );
-        this.menu.addMenuItem(this._usageItem);
+        const headerItem = new PopupMenu.PopupBaseMenuItem({reactive: false, can_focus: false});
+        const headerBox = new St.BoxLayout({style_class: 'claude-menu-header'});
+        headerBox.add_child(new St.Icon({
+            gicon: Gio.icon_new_for_string(`${this._extension.path}/icons/claude-symbolic.svg`),
+            icon_size: 16,
+        }));
+        headerBox.add_child(new St.Label({
+            text: 'Claude Usage',
+            style_class: 'claude-menu-title',
+        }));
+        headerItem.add_child(headerBox);
+        this.menu.addMenuItem(headerItem);
 
-        this._resetTimeItem = new PopupMenu.PopupMenuItem(
+        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+
+        this._sessionUsageItem = new UsageMenuItem('Session');
+        this.menu.addMenuItem(this._sessionUsageItem);
+
+        this._weeklyUsageItem = new UsageMenuItem('Weekly');
+        this.menu.addMenuItem(this._weeklyUsageItem);
+
+        this._resetTimeItem = new PopupMenu.PopupImageMenuItem(
             'Next reset: --',
+            'alarm-symbolic',
             {reactive: false}
         );
         this.menu.addMenuItem(this._resetTimeItem);
@@ -112,10 +179,12 @@ class ClaudeIndicator extends PanelMenu.Button {
 
         this._sessionValueLabel.set_text(`${sessionPct}%`);
         this._weeklyValueLabel.set_text(`${weeklyPct}%`);
-        this._usageItem.label.set_text(`Session: ${sessionPct}%   Weekly: ${weeklyPct}%`);
 
         this._sessionValueLabel.set_style_class_name(`claude-label ${this._colorClassFor(sessionPct)}`);
         this._weeklyValueLabel.set_style_class_name(`claude-label ${this._colorClassFor(weeklyPct)}`);
+
+        this._sessionUsageItem.setUsage(sessionPct, this._colorClassFor(sessionPct));
+        this._weeklyUsageItem.setUsage(weeklyPct, this._colorClassFor(weeklyPct));
 
         if (usage.five_hour?.resets_at) {
             const resetTime = new Date(usage.five_hour.resets_at);
@@ -136,6 +205,9 @@ class ClaudeIndicator extends PanelMenu.Button {
         this._weeklyValueLabel.set_text('err');
         this._sessionValueLabel.set_style_class_name('claude-label claude-critical');
         this._weeklyValueLabel.set_style_class_name('claude-label claude-critical');
+
+        this._sessionUsageItem.setUsage(0, 'claude-critical');
+        this._weeklyUsageItem.setUsage(0, 'claude-critical');
     }
 
     async _refreshUsage() {

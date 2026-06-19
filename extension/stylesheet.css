@@ -9,3 +9,53 @@
 .claude-critical {
     color: #ff7800; /* orange-red */
 }
+
+.claude-menu-header {
+    spacing: 8px;
+    padding: 4px 8px 4px 8px;
+}
+
+.claude-menu-title {
+    font-weight: bold;
+    font-size: 1.05em;
+}
+
+.claude-usage-row {
+    spacing: 6px;
+    padding: 6px 8px;
+}
+
+.claude-usage-row-header {
+    spacing: 8px;
+}
+
+.claude-usage-title {
+    font-weight: 600;
+}
+
+.claude-usage-value {
+    font-weight: 600;
+}
+
+.claude-progress-track {
+    height: 6px;
+    border-radius: 3px;
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+.claude-progress-fill {
+    height: 6px;
+    border-radius: 3px;
+}
+
+.claude-progress-fill.claude-safe-bg {
+    background-color: #57e389;
+}
+
+.claude-progress-fill.claude-moderate-bg {
+    background-color: #f8e45c;
+}
+
+.claude-progress-fill.claude-critical-bg {
+    background-color: #ff7800;
+}
